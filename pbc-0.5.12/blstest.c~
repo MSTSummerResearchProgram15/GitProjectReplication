@@ -1,0 +1,12 @@
+// Boneh-Lynn-Shacham short signatures demo.
+//
+// See the PBC_sig library for a practical implementation.
+//
+// Ben Lynn
+#include "include/pbc.h"
+#include "include/pbc_test.h"
+
+int main(int argc, char **argv) {
+  
+  return 0;
+}

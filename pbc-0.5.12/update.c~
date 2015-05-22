@@ -1,0 +1,313 @@
+#include<stdio.h>
+#include<sys/types.h>
+#include<sys/stat.h>
+#include<unistd.h>
+#include <dirent.h> 
+#include <string.h>
+#include "paillier.c"
+#include "include/pbc.h"
+#include "include/pbc_test.h"
+int main(int argc, char *argv[])
+{  
+   DIR *d;
+   FILE  *fpub, *fciph, *fplain, *fprod, *fkey, *fpairing, *frand, *ftag;
+   paillier_pubkey_t *pub;
+   paillier_plaintext_t *plain, *plain_sum, *plain_temp;
+   paillier_prvkey_t *priv;
+   paillier_get_rand_t get_rand;
+   paillier_tag* tag;
+   paillier_ciphertext_t *cipher, *cipher_prod, *cipher_total,  *cipher_copy;
+   int count = 0, count1=0, val = 81, no_copies = 3, n;
+   long int key_int, key_int1, key_rnd;
+   mpz_t *rand_prf;
+   gmp_randstate_t rand;
+   struct stat st= {0};
+   struct dirent *dir;
+   char* len;	
+   plain = (paillier_plaintext_t*) malloc(sizeof(paillier_plaintext_t));
+   plain_sum = (paillier_plaintext_t*) malloc(sizeof(paillier_plaintext_t));
+   plain_temp = (paillier_plaintext_t*) malloc(sizeof(paillier_plaintext_t));
+   cipher_prod = (paillier_ciphertext_t*) malloc(sizeof(paillier_ciphertext_t));
+   cipher_total = (paillier_ciphertext_t*) malloc(sizeof(paillier_ciphertext_t));
+   cipher = (paillier_ciphertext_t*) malloc(sizeof(paillier_ciphertext_t));
+   tag = (paillier_tag*) malloc(sizeof(paillier_tag));
+    mpz_init(tag->t);	
+
+   rand_prf = (mpz_t*) malloc(n*sizeof(mpz_t));
+   len = (char *)malloc(2048*sizeof(char));
+  
+   mpz_t pub_n, nsquare;
+   mpz_init(pub_n);
+   mpz_init(nsquare);
+   rand_prf = (mpz_t*) malloc(n*sizeof(mpz_t));
+
+   pairing_t pairing;
+   element_t g, h, u, sig, sig2, temp_pow, m;
+   element_t public_key, tag_prod;
+   element_t secret_key; 
+   pbc_demo_pairing_init(pairing, argc, argv);
+   element_init_G2(g, pairing);
+   element_init_G2(public_key, pairing);
+   element_init_G1(u, pairing);
+   element_init_G1(temp_pow, pairing);
+   element_init_G2(public_key, pairing);
+   element_init_G1(h, pairing);
+   element_init_G1(m, pairing);
+   element_init_G1(sig, pairing);
+   element_init_G1(sig2, pairing);
+//   element_init_G1(tag, pairing); 
+   element_init_G1(tag_prod, pairing);
+   element_init_Zr(secret_key, pairing);
+
+   if((fpub = fopen("pub.txt", "r")))
+    {
+       	pub = (paillier_pubkey_t*) malloc(sizeof(paillier_pubkey_t));
+	priv = (paillier_prvkey_t*) malloc(sizeof(paillier_prvkey_t));	
+	mpz_init(pub->n_squared);
+	mpz_init(pub->n);
+	fgets(len, 1000, fpub);
+   	mpz_init_set_str(pub->p, len, 10);
+	fgets(len, 1000, fpub);
+   	mpz_init_set_str(pub->q, len, 10);
+	fgets(len, 1000, fpub);
+   	mpz_init_set_str(pub->n_plusone, len, 10);
+	//printf("value of nplusone : \n");
+	//mpz_out_str(stdout, 10, pub->n_plusone);
+	paillier_keygen(&pub, &priv, get_rand, 0);
+        pub->bits = mpz_sizeinbase(pub->n, 2);	
+        fclose(fpub);
+    }
+
+
+   if((fpairing = fopen("pairing.txt", "r")))
+    {
+	fgets(len, 1000, fpairing);
+	//printf("\n %s\n", len);
+   	element_set_str(g, len, 10);
+	//element_printf(" g = %B\n", g);
+	fgets(len, 1000, fpairing);
+	//printf("\n %s\n", len);
+   	element_set_str(u, len, 10);
+	//element_printf("\n u= %B\n", u);
+	fgets(len, 1000, fpairing);
+	element_set_str(secret_key, len, 10);
+	//element_printf(" secretkeuy %B\n",secret_key);
+	fgets(len, 1000, fpairing);
+	element_set_str(public_key, len, 10);
+        //element_printf(" publickey %B\n", public_key);
+	fgets(len, 1000, fpairing);
+	element_set_str(h, len, 10);
+        //element_printf(" \nh = %B\n", h);
+	fgets(len, 1000, fpairing);
+	mpz_init_set_str(pub_n, len, 10);
+        mpz_mul(nsquare, pub_n, pub_n);
+	//printf("\n n = ");
+	//mpz_out_str(stdout, 10, pub_n);
+	fclose(fpairing);
+    }
+   cipher_copy = (paillier_ciphertext_t*)malloc(no_copies*sizeof(paillier_ciphertext_t));
+   char fileName[1000], file[1000],  copy[1000];
+   int i, j;
+   printf(" \n arg %d ", atoi(argv[2]));
+   frand = fopen("rand.txt","w");
+   //int i;
+   init_rand(rand, get_rand, pub->bits / 8 + 1);
+   for(i = 0; i< no_copies; i++)
+   {
+	mpz_init(rand_prf[i]);
+	do
+		mpz_urandomb(rand_prf[i], rand, pub->bits);
+	while( mpz_cmp(rand_prf[i], pub->n) >= 0 );
+	gmp_fprintf(frand, "%Zd\n", rand_prf[i]); 
+	//printf("\nrandom : \n");
+        //mpz_out_str(stdout, 10, rand_prf[i]);
+   }
+  fclose(frand);
+    char num[20];
+	
+   switch(atoi(argv[2]))
+   {
+      case 1:
+               printf("\n Insertion");
+              for(i = 0; i < val; i++)
+              {
+	       sprintf(fileName, "./split/output%d.txt", (i+1));	
+	       if(fplain = fopen(fileName, "r"))	
+                {
+		  fgets(len, 1000, fplain);
+		 // element_printf("\n text - %s", len);
+		  fclose(fplain);
+                }
+                // strcpy(fileName, "./insert/");  
+	      	 paillier_enc(tag, cipher_copy, pub,plain, get_rand, no_copies, rand_prf);
+		 for(j=0;j < no_copies; j++)
+			 {
+			   
+			    strcpy(copy, fileName);
+
+			    sprintf(num, "./cipher/insert/copy%d/output%d.txt", (j+1),(i+1));
+			   // strcat(copy, );
+			 //   strcat(copy, num);
+			  // if(stat(copy, &st) == -1)
+			    //  mkdir(copy,0777);
+
+			    //strcat(copy,dir->d_name);
+			    if(!(fciph = fopen(num, "w")))
+			    {
+				 printf("\nnot able to open file for writing cipher text %s", num);
+			    }
+			    else
+			    {
+				// printf("\nbefore enc");
+		
+				gmp_fprintf(fciph, "%Zd\n", cipher_copy[j].c); 	
+				fclose(fciph); 	
+			    }
+			 }	
+			//writing tags to files
+			//char num[20];
+			strcpy(fileName, "./tag_insert/");
+			sprintf(num, "output%d.txt", (i+1));
+			strcat(fileName, num);
+			//printf("\nfilename %s",fileName);
+			if(!(ftag = fopen(fileName, "w")))
+			{
+			 printf("\nnot able to open file for writing tag  %s", fileName);
+			}
+			else
+			{
+	
+			 element_pow_mpz(temp_pow,u, tag->t);
+			 element_mul(temp_pow, temp_pow, h);
+			// element_pow_zn(sig2, temp_pow, secret_key);
+			 element_fprintf(ftag, "%B", temp_pow);
+			 fclose(ftag);  
+		       } 	
+     		   }
+		
+               break;
+      case 2: 
+	       printf("\n Modification");
+	       int value = 1000;
+               mpz_t delta;
+               mpz_init(delta);
+               mpz_set_ui(delta, value);
+	       mpz_init(plain->m);
+               mpz_set_ui(plain->m, value);
+               paillier_enc_orig(cipher, pub, plain, get_rand);
+	       for(i = 0; i < val; i++)
+               {
+		 element_pow_mpz(temp_pow,u, delta);
+		 element_mul(temp_pow, temp_pow, h);	
+		 for(j = 0; j < no_copies; j++)
+		  {
+		     	 sprintf(num, "./cipher/copy%d/output%d.txt", (j+1),(i+1));
+			 if(fciph = fopen(num, "r"))
+			  {
+				fgets(len, 1000, fciph);
+				mpz_init(cipher_prod->c);
+				mpz_set_str(cipher_prod->c, len, 10 );
+				paillier_mul(pub, cipher_prod, cipher_prod, cipher);
+				element_fprintf(fciph,"%Zd", cipher_prod->c);
+				fclose(fciph);
+			  }
+		  }	
+	       }	
+	      // mpz_out_str(stdout, 10, cipher->c);
+		
+               break;
+      case 3: 
+	       
+		 printf("\n Insertion + modification");
+              for(i = 0; i < val; i++)
+              {
+	       sprintf(fileName, "./split/output%d.txt", (i+1));	
+	       if(fplain = fopen(fileName, "r"))	
+                {
+		  fgets(len, 1000, fplain);
+		 // element_printf("\n text - %s", len);
+		  fclose(fplain);
+                }
+                // strcpy(fileName, "./insert/");  
+	      	 paillier_enc(tag, cipher_copy, pub,plain, get_rand, no_copies, rand_prf);
+		 for(j=0;j < no_copies; j++)
+			 {
+			   
+			    strcpy(copy, fileName);
+
+			    sprintf(num, "./cipher/insert/copy%d/output%d.txt", (j+1),(i+1));
+			   // strcat(copy, );
+			 //   strcat(copy, num);
+			  // if(stat(copy, &st) == -1)
+			    //  mkdir(copy,0777);
+
+			    //strcat(copy,dir->d_name);
+			    if(!(fciph = fopen(num, "w")))
+			    {
+				 printf("\nnot able to open file for writing cipher text %s", num);
+			    }
+			    else
+			    {
+				// printf("\nbefore enc");
+		
+				gmp_fprintf(fciph, "%Zd\n", cipher_copy[j].c); 	
+				fclose(fciph); 	
+			    }
+			 }	
+			//writing tags to files
+			//char num[20];
+			strcpy(fileName, "./tag_insert/");
+			sprintf(num, "output%d.txt", (i+1));
+			strcat(fileName, num);
+			//printf("\nfilename %s",fileName);
+			if(!(ftag = fopen(fileName, "w")))
+			{
+			 printf("\nnot able to open file for writing tag  %s", fileName);
+			}
+			else
+			{
+	
+			 element_pow_mpz(temp_pow,u, tag->t);
+			 element_mul(temp_pow, temp_pow, h);
+			// element_pow_zn(sig2, temp_pow, secret_key);
+			 element_fprintf(ftag, "%B", temp_pow);
+			 fclose(ftag);  
+		       } 	
+     		   }
+
+		//mpz_t delta;
+               //mpz_init(delta);
+               mpz_set_ui(delta, value);
+	       mpz_init(plain->m);
+               mpz_set_ui(plain->m, value);
+               paillier_enc_orig(cipher, pub, plain, get_rand);
+	       for(i = 0; i < val; i++)
+               {
+		 element_pow_mpz(temp_pow,u, delta);
+		 element_mul(temp_pow, temp_pow, h);	
+		 for(j = 0; j < no_copies; j++)
+		  {
+		     	 sprintf(num, "./cipher/copy%d/output%d.txt", (j+1),(i+1));
+			 if(fciph = fopen(num, "r"))
+			  {
+				fgets(len, 1000, fciph);
+				mpz_init(cipher_prod->c);
+				mpz_set_str(cipher_prod->c, len, 10 );
+				paillier_mul(pub, cipher_prod, cipher_prod, cipher);
+				element_fprintf(fciph,"%Zd", cipher_prod->c);
+				fclose(fciph);
+			  }
+		  }	
+	       }	
+
+               break; 
+
+   }
+
+   // char fileName[1000], file[1000];;
+/*  for(i = 0; i < val; i++)
+   {  
+
+   } */ 
+
+}
