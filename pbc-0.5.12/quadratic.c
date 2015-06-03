@@ -22,7 +22,7 @@ int main(int argc, char *argv[])
   fclose(fpub);
   mpz_t temp;
   mpz_init(temp);
-  fquad = fopen("quad.txt", w); 
+  fquad = fopen("quad.txt", "w"); 
    while(cmp == 0)
    {
      // int j = mpz_cmp(i, n);
